@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <title>NSP Network Test</title>
+  <style>
+
+  #map {
+    width: 800px;
+    height: 600px;
+  }
+
+  #popout-box {
+    background-color: white;
+    border: 1px solid black;
+    bottom: 50px;
+    height: 200px;
+    width: 200px;
+    padding: 10px;
+    position: absolute;
+    left: 30px;
+    font: 10pt Arial;
+  }
+
+  .node {
+    stroke: #fff;
+    stroke-width: 1.5px;
+  }
+
+  .link {
+    stroke: #999;
+    stroke-opacity: .6;
+  }
+
+  </style>
+  
+  <script src="https://maps.googleapis.com/maps/api/js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+  
+</head>
+<body>
+
+  <div id="map"></div>
+  <div id="popout-box" class="inset"></div>
+  
+  <script>
+    var mapStyle
+
+    function initialize() {
+      var mapCanvas = document.getElementById('map');
+      var mapOptions = {
+        center: new google.maps.LatLng(34.2883, 69.7869),
+        zoom: 11,
+        mapTypeId: google.maps.MapTypeId.TERRAIN
+      }
+      var map = new google.maps.Map(mapCanvas, mapOptions);
+
+      map.data.loadGeoJson('maptestdata2.json');
+
+      map.data.setStyle(function(feature) {
+        if (feature.getProperty('type')=="village") {
+          var magnitude = feature.getProperty('population');
+          return {
+            icon: getCircle(magnitude), 
+            title: feature.getProperty('name') 
+          };
+        }
+        else {
+          return {
+            strokeColor: 'black',
+            strokeWeight: .2,
+            title: feature.getProperty('name1') + 
+              ',' + feature.getProperty('name2')
+          };  
+        }
+      });
+
+      map.data.addListener('click', function(event) {
+        if (event.feature.getProperty('type')=="village") {
+          document.getElementById('popout-box').textContent =
+            event.feature.getProperty('name');
+          setPopout(event.feature.getProperty('name')); 
+        }
+      });
+    }
+
+    function getCircle(magnitude) {
+      var circle = {
+        path: google.maps.SymbolPath.CIRCLE,
+        fillColor: 'red',
+        fillOpacity: .3,
+        scale: Math.sqrt(magnitude),
+        strokeColor: 'white',
+        strokeWeight: .5
+      };
+      return circle;
+    }
+
+    function setPopout(name) {
+      var width = 200,
+          height = 200;
+
+      var color = d3.scale.category20();
+
+      var force = d3.layout.force()
+          .charge(-120)
+          .linkDistance(30)
+          .size([width, height]);
+
+      d3.select("svg").remove();
+
+      var svg = d3.select(".inset").append("svg")
+          .attr("width", width)
+          .attr("height", height)
+        .append("g")  
+          .attr("transform", "translate(50, 50) scale(.3)");
+          
+      var path = "villages/" + name + ".json";
+
+      d3.json(path, function(error, graph) {
+        if (error) throw error;
+
+        force
+            .nodes(graph.nodes)
+            .links(graph.links)
+            .start();
+
+        var link = svg.selectAll(".link")
+            .data(graph.links)
+          .enter().append("line")
+            .attr("class", "link")
+            .style("stroke-width", function(d) { return Math.sqrt(d.value); });
+
+        var node = svg.selectAll(".node")
+            .data(graph.nodes)
+          .enter().append("circle")
+            .attr("class", "node")
+            .attr("r", 5)
+            .style("fill", function(d) { return color(d.group); })
+            .call(force.drag);
+
+        node.append("title")
+            .text(function(d) { return d.name; });
+
+        force.on("tick", function() {
+          link.attr("x1", function(d) { return d.source.x; })
+              .attr("y1", function(d) { return d.source.y; })
+              .attr("x2", function(d) { return d.target.x; })
+              .attr("y2", function(d) { return d.target.y; });
+
+          node.attr("cx", function(d) { return d.x; })
+              .attr("cy", function(d) { return d.y; });
+        });
+      });  
+    }
+
+    google.maps.event.addDomListener(window, 'load', initialize);
+
+  </script>
+</body>
+</html>
